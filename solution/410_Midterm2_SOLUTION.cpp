@@ -158,7 +158,10 @@ int main() {
 	thread shopper6(shopper, 6, 20);
 	thread shopper7(shopper, 7, 11);
 
-	cout<<"***************** in Main thread current value of widgetsAvailableToShoppers is"<<widgetsAvailableToShoppers<<endl;
+	{
+		unique_lock<mutex> lck(m);
+		cout<<"***************** in Main thread current value of widgetsAvailableToShoppers is"<<widgetsAvailableToShoppers<<endl;
+	}
 
 	stocker1.join();
 	shopper1.join();

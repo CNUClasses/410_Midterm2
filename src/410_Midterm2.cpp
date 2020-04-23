@@ -40,13 +40,19 @@ const int 	WIDGET_PRICE					= 1;	//cost per widget
 const int 	MAX_SHOPPERS 					= 2;	//max number of shoppers at a time
 
 //TODO 10 pts.. add any globals you need here, be sure to comment them
-int 		widgetsAvailableToShoppers		= 0;	//total number widgets available to buy
+int 				widgetsAvailableToShoppers		= 0;	//total number widgets available to buy
+bool 				stocker_done =false;
+condition_variable 	cv;
+Semaphore 			s(MAX_SHOPPERS);
+mutex 				m;
 
 //TODO 10 pts.. make this function efficiently threadsafe
 //Prints information to the console
 //id: thread id
 //s:  string thread wants to output to the console
+mutex m1;
 void report(int id, string s){
+	lock_guard<mutex> lck(m1);
 	cout<<"Thread "<<id<<" reported:"<<s<<endl;
 }
 
@@ -55,11 +61,13 @@ void report(int id, string s){
 //the next will block, until one of the previous shoppers calls exitStore()
 void enterStore(){
 	//TODO 10 pts.. implement logic to limit  number of shoppers in store
+	s.wait();
 }
 //allows another shopper in if 1 is waiting
 void exitStore(){
 	//TODO 10 pts.. implement logic to call when a shopper exits store
-}
+	s.signal();
+}stocker_done
 
 //Waits to enter store and then buys as many widgets, 1 at a time,
 //as it can afford from widgetsAvailableToShoppers
@@ -76,15 +84,32 @@ void shopper(int id, int cash ){
 
 		//TODO 20 pts as long as this shopper has cash>WIDGET_PRICE, and widgetsAvailableToShoppers == 0
 		//and the stocker has not put out all the widgets, then wait until widgets are available to shoppers
+		unique_lock<mutex> lck(m);
+		while( widgetsAvailableToShoppers == 0 && stocker_done==false && cash >= WIDGET_PRICE)
+			cv.wait(lck);
 
 		//TODO 2 pts if shopper out of cash (not enough to buy a widget) then leave
 		//use the report function to indicate the shopper is "out of money, so leaving"
+		if(cash<WIDGET_PRICE){
+			report(id,"out of money, so leaving" );
+			break;
+		}
 
 		//TODO 4 pts if there are widgets, then buy one (1)
 		//use the report function to indicate the shopper "bought 1 widget"
+		if(widgetsAvailableToShoppers>0){
+			cash-=WIDGET_PRICE;
+			widgetsAvailableToShoppers--;
+			report(id,"bought 1 widget");
+		}
 
 		//TODO 4 pts if sold out and stocker finished then leave
 		//use the report function to indicate "ran out of widgets to buy before ran out of money"
+		if(widgetsAvailableToShoppers==0 && stocker_done==true){
+			report(id,"ran out of widgets to buy before ran out of money");
+			break;
+		}
+
 	}
 
 	exitStore();
@@ -99,6 +124,25 @@ void shopper(int id, int cash ){
 //widgetsInStockRoom: the total number of widgets in the stockroom
 void stocker(int widgetsInStockRoom){
 
+	//TODO handle synchronization code
+	while(widgetsInStockRoom>0){
+		//TODO 15 pts .. take 1 from widgetsInStockRoom
+		//and add it to WidgetsAvailable
+		{
+			lock_guard<mutex> lck(m);
+			widgetsAvailableToShoppers += 1;
+		}
+		widgetsInStockRoom--;
+
+		cv.notify_all();
+	}
+
+	//TODO 5 pts.. tell shoppers stocker has finished putting out all widgets
+	{
+		lock_guard<mutex> lck(m);
+		stocker_done=true;
+	}
+	cv.notify_all();
 }
 
 int main() {
@@ -114,7 +158,10 @@ int main() {
 	thread shopper6(shopper, 6, 20);
 	thread shopper7(shopper, 7, 11);
 
-	cout<<"***************** in Main thread current value of widgetsAvailableToShoppers is"<<widgetsAvailableToShoppers<<endl;
+	{
+		unique_lock<mutex> lck(m);
+		cout<<"***************** in Main thread current value of widgetsAvailableToShoppers is"<<widgetsAvailableToShoppers<<endl;
+	}
 
 	stocker1.join();
 	shopper1.join();
