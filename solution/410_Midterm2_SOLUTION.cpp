@@ -145,6 +145,7 @@ void stocker(int widgetsInStockRoom){
 	cv.notify_all();
 }
 
+
 int main() {
 	//TODO 10 pts.. handle synchronization code
 	cout << "The initial value of widgetsAvailableToShoppers is " << widgetsAvailableToShoppers << endl; //
